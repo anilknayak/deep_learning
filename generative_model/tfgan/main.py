@@ -1,9 +1,11 @@
 import tensorflow as tf
 import tensorflow_gan as tfgan
-from deep_learning.generative_model.gan.generator import Generator as generator
-from deep_learning.generative_model.gan.discriminator import Discriminator as discriminator
+from deep_learning.generative_model.tfgan.generator import Generator as generator
+from deep_learning.generative_model.tfgan.discriminator import Discriminator as discriminator
 from tensorflow_gan.examples.mnist import util as eval_util
-import os
+from deep_learning.generative_model.tfgan import input
+import numpy as np
+import matplotlib.pyplot as plt
 
 print(tf.__version__)
 
@@ -35,3 +37,42 @@ gan_estimator = tfgan.estimator.GANEstimator(
     discriminator_optimizer=discriminator.optimizer,
     get_eval_metric_ops_fn=get_eval_metric_ops_fn)
 
+real_logits, fake_logits = [], []
+real_mnist_scores, mnist_scores, frechet_distances = [], [], []
+eval_batch = 2
+eval_after_epoch = 2
+epochs = 10
+epoch = 0
+num_epochs = []
+while epoch < epochs:
+    # Train GAN
+    next_epoch = min(epoch+eval_after_epoch, epochs)
+    gan_estimator.train(input.input_fn, max_steps=next_epoch)
+    epoch = next_epoch
+    num_epochs.append(epoch)
+
+    # Evaluate GAN
+    metrics = gan_estimator.evaluate(input.input_fn, steps=eval_batch)
+    real_logits.append(metrics['real_data_logits'])
+    fake_logits.append(metrics['gen_data_logits'])
+    real_mnist_scores.append(metrics['real_mnist_score'])
+    mnist_scores.append(metrics['mnist_score'])
+    frechet_distances.append(metrics['frechet_distance'])
+    print('Average discriminator output on Real: %.2f  Fake: %.2f' % (real_logits[-1], fake_logits[-1]))
+    print('Inception Score: %.2f / %.2f  Frechet Distance: %.2f' % (mnist_scores[-1], real_mnist_scores[-1], frechet_distances[-1]))
+
+    iterator = gan_estimator.predict(input.input_fn, hooks=[tf.train.StopAtStepHook(num_steps=3)])
+    try:
+        imgs = np.array([next(iterator) for _ in range(20)])
+    except StopIteration:
+        pass
+
+    tiled = tfgan.eval.python_image_grid(imgs, grid_shape=(2, 10))
+    plt.imshow(np.squeeze(tiled))
+
+plt.title('MNIST Frechet distance per step')
+plt.plot(num_epochs, frechet_distances)
+plt.figure()
+plt.title('MNIST Score per step')
+plt.plot(num_epochs, mnist_scores)
+plt.plot(num_epochs, real_mnist_scores)

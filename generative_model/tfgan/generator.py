@@ -1,5 +1,5 @@
 import tensorflow as tf
-from deep_learning.generative_model.gan.common import Layer as layer
+from deep_learning.generative_model.tfgan.common import Layer as layer
 class Generator:
     def __init__(self):
         print("Creating generator")
